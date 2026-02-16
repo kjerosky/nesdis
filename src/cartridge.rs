@@ -1,6 +1,6 @@
 use std::{fs::File, io::Read, vec};
 
-use crate::instruction::print_disassembled_instruction;
+use crate::instruction::disassemble_instruction;
 
 const NES_HEADER_BYTES: usize = 16;
 
@@ -95,11 +95,15 @@ impl Cartridge {
                 None => panic!("[ERROR] Attempted to get a new entry point that didn't exist...this shouldn't happen!"),
             };
 
-            //todo replace with loop that eventually meets a stopping condition
-            loop {
-                let current_instruction_bytes = print_disassembled_instruction(
+            let mut is_processing_complete = false;
+            while !is_processing_complete {
+                let (is_section_complete, current_instruction_bytes, text_line) = disassemble_instruction(
                     &self.prg_rom_contents, current_address - 0x8000, current_address);
 
+                //todo we need to assemble the lines later, but we'll just print the line here for now
+                println!("{text_line}");
+
+                is_processing_complete = is_section_complete;
                 current_address += current_instruction_bytes;
             }
         }
