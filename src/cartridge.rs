@@ -1,6 +1,6 @@
 use std::{collections::HashMap, fs::File, io::Read, vec};
 
-use crate::{instruction::disassemble_instruction, labeller::{self, Labeller}};
+use crate::{instruction::disassemble_instruction, labeller::{Labeller}};
 
 const NES_HEADER_BYTES: usize = 16;
 
@@ -86,7 +86,10 @@ impl Cartridge {
         println!("------------------------------------------------------------------------------");
 
         self.disassemble_from_entry_point(reset_vector, "RESET");
-        //todo disassemble for the nmi and irq vectors
+        self.disassemble_from_entry_point(nmi_vector, "NMI");
+
+        //todo smb1 disables irq from the start, so let's not disassemble from irq for now
+        //self.disassemble_from_entry_point(irq_vector, "IRQ");
     }
 
     // -----------------------------------------------------------------------
@@ -128,7 +131,7 @@ impl Cartridge {
         let mut address = 0usize;
         while address < 65536 {
             if let Some(global_label) = self.global_labels.get(&address) {
-                println!("{global_label}: [{:04X}]", address);
+                println!("\n\n\n{global_label}: [{:04X}]", address);
             }
 
             if let Some(branch_label) = self.labeller.get_branch_target_label(address) {
