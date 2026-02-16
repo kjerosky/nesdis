@@ -4,6 +4,7 @@ use crate::cartridge::Cartridge;
 
 mod cartridge;
 mod instruction;
+mod labeller;
 
 fn main() -> ExitCode {
     let args: Vec<String> = env::args().collect();
@@ -13,8 +14,9 @@ fn main() -> ExitCode {
     }
 
     let cartridge_filename = &args[1];
-    let cartridge = Cartridge::load_from_file(cartridge_filename);
+    let mut cartridge = Cartridge::load_from_file(cartridge_filename);
     cartridge.disassemble();
+    cartridge.print_disassembly();
 
     return ExitCode::SUCCESS;
 }

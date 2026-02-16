@@ -1,6 +1,6 @@
-use std::{fs::File, io::Read, vec};
+use std::{collections::HashMap, fs::File, io::Read, vec};
 
-use crate::instruction::disassemble_instruction;
+use crate::{instruction::disassemble_instruction, labeller::{self, Labeller}};
 
 const NES_HEADER_BYTES: usize = 16;
 
@@ -10,6 +10,10 @@ pub struct Cartridge {
     chr_rom_bank_count: u8,
     prg_rom_contents: Vec<u8>,
     chr_rom_contents: Vec<u8>,
+
+    global_labels: HashMap<usize, String>,
+    labeller: Labeller,
+    text_lines: HashMap<usize, TextLine>,
 }
 
 // ---------------------------------------------------------------------------
@@ -52,12 +56,16 @@ impl Cartridge {
             chr_rom_bank_count,
             prg_rom_contents,
             chr_rom_contents,
+
+            global_labels: HashMap::new(),
+            labeller: Labeller::new(),
+            text_lines: HashMap::new(),
         }
     }
 
     // -----------------------------------------------------------------------
 
-    pub fn disassemble(&self) {
+    pub fn disassemble(&mut self) {
         println!("------------------------------------------------------------------------------");
 
         if self.mapper_id != 0 {
@@ -83,8 +91,8 @@ impl Cartridge {
 
     // -----------------------------------------------------------------------
 
-    fn disassemble_from_entry_point(&self, entry_point: usize, entry_point_label: &str) {
-        println!("{entry_point_label}: [{:04X}]", entry_point);
+    fn disassemble_from_entry_point(&mut self, entry_point: usize, entry_point_label: &str) {
+        self.global_labels.insert(entry_point, entry_point_label.to_string());
 
         let mut entry_points: Vec<usize> = Vec::new();
         entry_points.push(entry_point);
@@ -98,14 +106,56 @@ impl Cartridge {
             let mut is_processing_complete = false;
             while !is_processing_complete {
                 let (is_section_complete, current_instruction_bytes, text_line) = disassemble_instruction(
-                    &self.prg_rom_contents, current_address - 0x8000, current_address);
+                    &self.prg_rom_contents, current_address - 0x8000, current_address, &mut self.labeller);
 
-                //todo we need to assemble the lines later, but we'll just print the line here for now
-                println!("{text_line}");
+                self.text_lines.insert(
+                    current_address,
+                    TextLine {
+                        contents: text_line,
+                        bytes: current_instruction_bytes,
+                    }
+                );
 
                 is_processing_complete = is_section_complete;
                 current_address += current_instruction_bytes;
             }
         }
     }
+
+    // -----------------------------------------------------------------------
+
+    pub fn print_disassembly(&self) {
+        let mut address = 0usize;
+        while address < 65536 {
+            if let Some(global_label) = self.global_labels.get(&address) {
+                println!("{global_label}: [{:04X}]", address);
+            }
+
+            if let Some(branch_label) = self.labeller.get_branch_target_label(address) {
+                println!("{branch_label}: [{:04X}]", address);
+            }
+
+            if let Some(jump_label) = self.labeller.get_jump_target_label(address) {
+                println!("{jump_label}: [{:04X}]", address);
+            }
+
+            if let Some(subroutine_label) = self.labeller.get_subroutine_label(address) {
+                println!("{subroutine_label}: [{:04X}]", address);
+            }
+
+            if let Some(text_line) = self.text_lines.get(&address) {
+                println!("{}", text_line.contents);
+                address += text_line.bytes;
+            } else {
+                address += 1;
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+
+struct TextLine {
+    contents: String,
+    bytes: usize,
 }
