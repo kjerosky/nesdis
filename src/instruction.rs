@@ -1,12 +1,13 @@
 use crate::labeller::Labeller;
 
-pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, address: usize, labeller: &mut Labeller) -> (bool, usize, String) {
+pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, address: usize, labeller: &mut Labeller) -> (bool, usize, String, Option<usize>) {
     let operand1 = prg_rom_contents[contents_offset + 1];
     let operand2 = prg_rom_contents[contents_offset + 2];
 
     let mut is_section_complete = false;
     let instruction_text;
     let instruction_bytes_count;
+    let mut address_for_later_processing = None;
     match prg_rom_contents[contents_offset] {
         0x09 => {
             instruction_bytes_count = 2;
@@ -18,6 +19,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
             instruction_text = format!("BPL {label}");
+            address_for_later_processing = Some(target_address);
         },
         0x18 => {
             instruction_bytes_count = 1;
@@ -29,6 +31,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let abs = create_u16(operand1, operand2);
             let label = labeller.request_label_for_subroutine(abs as usize);
             instruction_text = format!("JSR {label}");
+            address_for_later_processing = Some(abs as usize);
         },
         0x29 => {
             instruction_bytes_count = 2;
@@ -63,6 +66,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let label = labeller.request_label_for_jump_target(abs as usize);
             instruction_text = format!("JMP {label}");
             is_section_complete = address as u16 == abs;
+            address_for_later_processing = Some(abs as usize);
         },
 
         0x68 => {
@@ -143,6 +147,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
             instruction_text = format!("BCS {label}");
+            address_for_later_processing = Some(target_address);
         },
         0xBD => {
             instruction_bytes_count = 3;
@@ -181,6 +186,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
             instruction_text = format!("BNE {label}");
+            address_for_later_processing = Some(target_address);
         },
         0xD8 => {
             instruction_bytes_count = 1;
@@ -217,6 +223,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
             instruction_text = format!("BEQ {label}");
+            address_for_later_processing = Some(target_address);
         },
 
         unknown_opcode => {
@@ -234,7 +241,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
     }
     let text_line = format!("    {instruction_text}        # {:04X} |{bytes}", address);
 
-    (is_section_complete, instruction_bytes_count, text_line)
+    (is_section_complete, instruction_bytes_count, text_line, address_for_later_processing)
 }
 
 // ---------------------------------------------------------------------------

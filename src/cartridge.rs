@@ -106,10 +106,19 @@ impl Cartridge {
                 None => panic!("[ERROR] Attempted to get a new entry point that didn't exist...this shouldn't happen!"),
             };
 
-            let mut is_processing_complete = false;
-            while !is_processing_complete {
-                let (is_section_complete, current_instruction_bytes, text_line) = disassemble_instruction(
+            let mut is_current_section_processing_complete = false;
+            while !is_current_section_processing_complete {
+                if self.text_lines.contains_key(&current_address) {
+                    is_current_section_processing_complete = true;
+                    continue;
+                }
+
+                let (is_section_complete, current_instruction_bytes, text_line, address_for_later_processing) = disassemble_instruction(
                     &self.prg_rom_contents, current_address - 0x8000, current_address, &mut self.labeller);
+
+                if let Some(new_entry_point) = address_for_later_processing && !self.text_lines.contains_key(&new_entry_point) {
+                    entry_points.push(new_entry_point);
+                }
 
                 self.text_lines.insert(
                     current_address,
@@ -119,7 +128,7 @@ impl Cartridge {
                     }
                 );
 
-                is_processing_complete = is_section_complete;
+                is_current_section_processing_complete = is_section_complete;
                 current_address += current_instruction_bytes;
             }
         }
