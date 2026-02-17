@@ -11,6 +11,9 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
     let instruction_text;
     let instruction_bytes_count;
     let mut address_for_later_processing = None;
+
+    // This page was invaluable for figuring out instruction specifics:
+    // https://www.masswerk.at/6502/6502_instruction_set.html
     match prg_rom_contents[contents_offset] {
         0x05 => {
             instruction_bytes_count = 2;
@@ -56,6 +59,13 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_text = format!("BIT {absolute_address_formatted}");
         },
 
+        0x30 => {
+            instruction_bytes_count = 2;
+            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            let label = labeller.request_label_for_branch_target(target_address);
+            instruction_text = format!("BMI {label}");
+            address_for_later_processing = Some(target_address);
+        },
         0x31 => {
             instruction_bytes_count = 2;
             instruction_text = format!("AND ({operand1_formatted}), Y");
@@ -78,6 +88,10 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_bytes_count = 2;
             instruction_text = format!("EOR {operand1_formatted}");
         },
+        0x46 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("LSR {operand1_formatted}");
+        },
         0x48 => {
             instruction_bytes_count = 1;
             instruction_text = format!("PHA");
@@ -94,7 +108,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_bytes_count = 3;
             let label = labeller.request_label_for_jump_target(absolute_address as usize);
             instruction_text = format!("JMP {label}");
-            is_section_complete = address as u16 == absolute_address;
+            is_section_complete = true;
             address_for_later_processing = Some(absolute_address as usize);
         },
 
@@ -115,10 +129,18 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_bytes_count = 2;
             instruction_text = format!("ADC #{operand1_formatted}");
         },
+        0x6A => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("ROR A");
+        },
         0x6C => {
             instruction_bytes_count = 3;
             instruction_text = format!("JMP ({absolute_address_formatted})");
             is_section_complete = true;
+        },
+        0x6D => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("ADC {absolute_address_formatted}");
         },
 
         0x78 => {
@@ -149,6 +171,10 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0x8A => {
             instruction_bytes_count = 1;
             instruction_text = format!("TXA");
+        },
+        0x8C => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("STY {absolute_address_formatted}");
         },
         0x8D => {
             instruction_bytes_count = 3;
@@ -198,6 +224,18 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xA2 => {
             instruction_bytes_count = 2;
             instruction_text = format!("LDX #{operand1_formatted}");
+        },
+        0xA4 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("LDY {operand1_formatted}");
+        },
+        0xA5 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("LDA {operand1_formatted}");
+        },
+        0xA6 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("LDX {operand1_formatted}");
         },
         0xA8 => {
             instruction_bytes_count = 1;
@@ -256,6 +294,10 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_bytes_count = 2;
             instruction_text = format!("CMP {operand1_formatted}");
         },
+        0xC8 => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("INY");
+        },
         0xC9 => {
             instruction_bytes_count = 2;
             instruction_text = format!("CMP #{operand1_formatted}");
@@ -264,9 +306,9 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_bytes_count = 1;
             instruction_text = format!("DEX");
         },
-        0xC8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("INY");
+        0xCC => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("CPY {absolute_address_formatted}");
         },
         0xCE => {
             instruction_bytes_count = 3;
