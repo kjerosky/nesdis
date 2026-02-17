@@ -77,7 +77,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0x7E => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("ROR ${:04X}, X", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("ROR {abs}, X");
         },
 
         0x85 => {
@@ -87,7 +88,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0x8D => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("STA ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("STA {abs}");
         },
         0x88 => {
             instruction_bytes_count = 1;
@@ -101,7 +103,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0x9D => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("STA ${:04X}, X", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("STA {abs}, X");
         },
 
         0xA0 => {
@@ -119,17 +122,20 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xAC => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("LDY ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("LDY {abs}");
         },
         0xAD => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("LDA ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("LDA {abs}");
         },
         0xAE => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("LDX ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("LDX {abs}");
         },
 
         0xB0 => {
@@ -141,12 +147,14 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xBD => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("LDA ${:04X}, X", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("LDA {abs}, X");
         },
         0xBE => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("LDX ${:04X}, Y", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("LDX {abs}, Y");
         },
 
         0xC9 => {
@@ -164,7 +172,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xCE => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("DEC ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("DEC {abs}");
         },
 
         0xD0 => {
@@ -180,7 +189,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xDE => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("DEC ${:04X}, X", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("DEC {abs}, X");
         },
 
         0xE0 => {
@@ -198,7 +208,8 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         0xEE => {
             instruction_bytes_count = 3;
             let abs = create_u16(operand1, operand2);
-            instruction_text = format!("INC ${:04X}", abs);
+            let abs = format_absolute_address(abs);
+            instruction_text = format!("INC {abs}");
         },
 
         0xF0 => {
@@ -237,4 +248,43 @@ fn create_u16(low_byte: u8, high_byte: u8) -> u16 {
 fn calculate_target_address(address: u16, signed_offset: u8) -> usize {
     let sign_extended_offset = ((signed_offset as i8) as i16) as u16;
     (address as u16).wrapping_add(sign_extended_offset) as usize
+}
+
+// ---------------------------------------------------------------------------
+
+fn format_absolute_address(address: u16) -> String {
+    // These names are taken from the Mesen emulator, because they're well-named. 🙂
+    match address {
+        0x2000 => String::from("PpuControl_2000"),
+        0x2001 => String::from("PpuMask_2001"),
+        0x2002 => String::from("PpuStatus_2002"),
+        0x2003 => String::from("OamAddr_2003"),
+        0x2004 => String::from("OamData_2004"),
+        0x2005 => String::from("PpuScroll_2005"),
+        0x2006 => String::from("PpuAddr_2006"),
+        0x2007 => String::from("PpuData_2007"),
+        0x4000 => String::from("Sq0Duty_4000"),
+        0x4001 => String::from("Sq0Sweep_4001"),
+        0x4002 => String::from("Sq0Timer_4002"),
+        0x4003 => String::from("Sq0Length_4003"),
+        0x4004 => String::from("Sq1Duty_4004"),
+        0x4005 => String::from("Sq1Sweep_4005"),
+        0x4006 => String::from("Sq1Timer_4006"),
+        0x4007 => String::from("Sq1Length_4007"),
+        0x4008 => String::from("TrgLinear_4008"),
+        0x400A => String::from("TrgTimer_400A"),
+        0x400B => String::from("TrgLength_400B"),
+        0x400C => String::from("NoiseVolume_400C"),
+        0x400E => String::from("NoisePeriod_400E"),
+        0x400F => String::from("NoiseLength_400F"),
+        0x4010 => String::from("DmcFreq_4010"),
+        0x4011 => String::from("DmcCounter_4011"),
+        0x4012 => String::from("DmcAddress_4012"),
+        0x4013 => String::from("DmcLength_4013"),
+        0x4014 => String::from("SpriteDma_4014"),
+        0x4015 => String::from("ApuStatus_4015"),
+        0x4016 => String::from("Ctrl1_4016"),
+        0x4017 => String::from("Ctrl2_FrameCtr_4017"),
+        non_reserved_address => format!("${:04X}", non_reserved_address),
+    }
 }

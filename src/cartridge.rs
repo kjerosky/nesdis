@@ -143,7 +143,7 @@ impl Cartridge {
             }
 
             if let Some(subroutine_label) = self.labeller.get_subroutine_label(address) {
-                println!("{subroutine_label}: [{:04X}]", address);
+                println!("\n\n\n{subroutine_label}: [{:04X}]", address);
             }
 
             if let Some(text_line) = self.text_lines.get(&address) {
