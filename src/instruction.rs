@@ -3,15 +3,26 @@ use crate::labeller::Labeller;
 pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, address: usize, labeller: &mut Labeller) -> (bool, usize, String, Option<usize>) {
     let operand1 = prg_rom_contents[contents_offset + 1];
     let operand2 = prg_rom_contents[contents_offset + 2];
+    let absolute_address = create_u16(operand1, operand2);
+    let absolute_address_formatted = format_absolute_address(absolute_address);
+    let operand1_formatted = format!("${:02X}", operand1);
 
     let mut is_section_complete = false;
     let instruction_text;
     let instruction_bytes_count;
     let mut address_for_later_processing = None;
     match prg_rom_contents[contents_offset] {
+        0x05 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("ORA {operand1_formatted}");
+        },
         0x09 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("ORA #${:02X}", operand1);
+            instruction_text = format!("ORA #{operand1_formatted}");
+        },
+        0x0A => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("ASL A");
         },
 
         0x10 => {
@@ -28,19 +39,34 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
 
         0x20 => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let label = labeller.request_label_for_subroutine(abs as usize);
+            let label = labeller.request_label_for_subroutine(absolute_address as usize);
             instruction_text = format!("JSR {label}");
-            address_for_later_processing = Some(abs as usize);
+            address_for_later_processing = Some(absolute_address as usize);
         },
         0x29 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("AND #${:02X}", operand1);
+            instruction_text = format!("AND #{operand1_formatted}");
+        },
+        0x2A => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("ROL A");
+        },
+        0x2C => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("BIT {absolute_address_formatted}");
         },
 
+        0x31 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("AND ({operand1_formatted}), Y");
+        },
         0x38 => {
             instruction_bytes_count = 1;
             instruction_text = format!("SEC");
+        },
+        0x3D => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("AND {absolute_address_formatted}, X");
         },
 
         0x40 => {
@@ -50,11 +76,15 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         },
         0x45 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("EOR ${:02X}", operand1);
+            instruction_text = format!("EOR {operand1_formatted}");
         },
         0x48 => {
             instruction_bytes_count = 1;
             instruction_text = format!("PHA");
+        },
+        0x49 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("EOR #{operand1_formatted}");
         },
         0x4A => {
             instruction_bytes_count = 1;
@@ -62,84 +92,136 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         },
         0x4C => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let label = labeller.request_label_for_jump_target(abs as usize);
+            let label = labeller.request_label_for_jump_target(absolute_address as usize);
             instruction_text = format!("JMP {label}");
-            is_section_complete = address as u16 == abs;
-            address_for_later_processing = Some(abs as usize);
+            is_section_complete = address as u16 == absolute_address;
+            address_for_later_processing = Some(absolute_address as usize);
         },
 
+        0x60 => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("RTS");
+            is_section_complete = true;
+        },
+        0x65 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("ADC {operand1_formatted}");
+        },
         0x68 => {
             instruction_bytes_count = 1;
             instruction_text = format!("PLA");
+        },
+        0x69 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("ADC #{operand1_formatted}");
+        },
+        0x6C => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("JMP ({absolute_address_formatted})");
+            is_section_complete = true;
         },
 
         0x78 => {
             instruction_bytes_count = 1;
             instruction_text = format!("SEI");
         },
+        0x79 => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("ADC {absolute_address_formatted}, Y");
+        },
         0x7E => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("ROR {abs}, X");
+            instruction_text = format!("ROR {absolute_address_formatted}, X");
         },
 
+        0x84 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("STY {operand1_formatted}");
+        },
         0x85 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("STA ${:02X}", operand1);
+            instruction_text = format!("STA {operand1_formatted}");
+        },
+        0x86 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("STX {operand1_formatted}");
+        },
+        0x8A => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("TXA");
         },
         0x8D => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("STA {abs}");
+            instruction_text = format!("STA {absolute_address_formatted}");
+        },
+        0x8E => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("STX {absolute_address_formatted}");
         },
         0x88 => {
             instruction_bytes_count = 1;
             instruction_text = format!("DEY");
         },
 
+        0x90 => {
+            instruction_bytes_count = 2;
+            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            let label = labeller.request_label_for_branch_target(target_address);
+            instruction_text = format!("BCC {label}");
+            address_for_later_processing = Some(target_address);
+        },
+        0x91 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("STA ({operand1_formatted}), Y");
+        },
+        0x98 => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("TYA");
+        },
+        0x99 => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("STA {absolute_address_formatted}, Y");
+        },
         0x9A => {
             instruction_bytes_count = 1;
             instruction_text = format!("TXS");
         },
         0x9D => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("STA {abs}, X");
+            instruction_text = format!("STA {absolute_address_formatted}, X");
         },
 
         0xA0 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("LDY #${:02X}", operand1);
+            instruction_text = format!("LDY #{operand1_formatted}");
         },
         0xA2 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("LDX #${:02X}", operand1);
+            instruction_text = format!("LDX #{operand1_formatted}");
+        },
+        0xA8 => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("TAY");
         },
         0xA9 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("LDA #${:02X}", operand1);
+            instruction_text = format!("LDA #{operand1_formatted}");
+        },
+        0xAA => {
+            instruction_bytes_count = 1;
+            instruction_text = format!("TAX");
         },
         0xAC => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("LDY {abs}");
+            instruction_text = format!("LDY {absolute_address_formatted}");
         },
         0xAD => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("LDA {abs}");
+            instruction_text = format!("LDA {absolute_address_formatted}");
         },
         0xAE => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("LDX {abs}");
+            instruction_text = format!("LDX {absolute_address_formatted}");
         },
 
         0xB0 => {
@@ -149,22 +231,34 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             instruction_text = format!("BCS {label}");
             address_for_later_processing = Some(target_address);
         },
+        0xB1 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("LDA ({operand1_formatted}), Y");
+        },
+        0xB9 => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("LDA {absolute_address_formatted}, Y");
+        },
         0xBD => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("LDA {abs}, X");
+            instruction_text = format!("LDA {absolute_address_formatted}, X");
         },
         0xBE => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("LDX {abs}, Y");
+            instruction_text = format!("LDX {absolute_address_formatted}, Y");
         },
 
+        0xC0 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("CPY #{operand1_formatted}");
+        },
+        0xC5 => {
+            instruction_bytes_count = 2;
+            instruction_text = format!("CMP {operand1_formatted}");
+        },
         0xC9 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("CMP #${:02X}", operand1);
+            instruction_text = format!("CMP #{operand1_formatted}");
         },
         0xCA => {
             instruction_bytes_count = 1;
@@ -176,9 +270,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         },
         0xCE => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("DEC {abs}");
+            instruction_text = format!("DEC {absolute_address_formatted}");
         },
 
         0xD0 => {
@@ -194,18 +286,16 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         },
         0xDE => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("DEC {abs}, X");
+            instruction_text = format!("DEC {absolute_address_formatted}, X");
         },
 
         0xE0 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("CPX #${:02X}", operand1);
+            instruction_text = format!("CPX #{operand1_formatted}");
         },
         0xE6 => {
             instruction_bytes_count = 2;
-            instruction_text = format!("INC ${:02X}", operand1);
+            instruction_text = format!("INC {operand1_formatted}");
         },
         0xE8 => {
             instruction_bytes_count = 1;
@@ -213,9 +303,7 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
         },
         0xEE => {
             instruction_bytes_count = 3;
-            let abs = create_u16(operand1, operand2);
-            let abs = format_absolute_address(abs);
-            instruction_text = format!("INC {abs}");
+            instruction_text = format!("INC {absolute_address_formatted}");
         },
 
         0xF0 => {
@@ -224,6 +312,10 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
             let label = labeller.request_label_for_branch_target(target_address);
             instruction_text = format!("BEQ {label}");
             address_for_later_processing = Some(target_address);
+        },
+        0xF9 => {
+            instruction_bytes_count = 3;
+            instruction_text = format!("SBC {absolute_address_formatted}, Y");
         },
 
         unknown_opcode => {
