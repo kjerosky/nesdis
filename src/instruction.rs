@@ -1,6 +1,13 @@
 use crate::labeller::Labeller;
 
-pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, address: usize, labeller: &mut Labeller) -> (bool, usize, String, Option<usize>) {
+pub struct DisassembledInstruction {
+    pub is_section_complete: bool,
+    pub bytes_count: usize,
+    pub text_line: String,
+    pub address_to_process_later: Option<usize>,
+}
+
+pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, address: usize, labeller: &mut Labeller) -> Option<DisassembledInstruction> {
     let operand1 = prg_rom_contents[contents_offset + 1];
     let operand2 = prg_rom_contents[contents_offset + 2];
     let absolute_address = create_u16(operand1, operand2);
@@ -8,681 +15,689 @@ pub fn disassemble_instruction(prg_rom_contents: &[u8], contents_offset: usize, 
     let operand1_formatted = format!("${:02X}", operand1);
 
     let mut is_section_complete = false;
-    let instruction_text;
-    let instruction_bytes_count;
-    let mut address_for_later_processing = None;
+    let instruction_text: Option<String>;
+    let bytes_count;
+    let mut address_to_process_later = None;
 
     // This page was invaluable for figuring out instruction specifics:
     // https://www.masswerk.at/6502/6502_instruction_set.html
     match prg_rom_contents[contents_offset] {
         0x00 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("BRK");
+
+            bytes_count = 1;
+            instruction_text = Some(format!("BRK"));
         },
         0x01 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ORA ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("ORA ({operand1_formatted},X)"));
         },
         0x05 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ORA {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ORA {operand1_formatted}"));
         },
         0x06 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ASL {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ASL {operand1_formatted}"));
         },
         0x08 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("PHP");
+            bytes_count = 1;
+            instruction_text = Some(format!("PHP"));
         },
         0x09 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ORA #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ORA #{operand1_formatted}"));
         },
         0x0A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("ASL A");
+            bytes_count = 1;
+            instruction_text = Some(format!("ASL A"));
         },
         0x0D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ORA {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("ORA {absolute_address_formatted}"));
         },
         0x0E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ASL {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("ASL {absolute_address_formatted}"));
         },
 
         0x10 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BPL {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BPL {label}"));
+            address_to_process_later = Some(target_address);
         },
         0x11 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ORA ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("ORA ({operand1_formatted}),Y"));
         },
         0x15 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ORA {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("ORA {operand1_formatted},X"));
         },
         0x16 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ASL {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("ASL {operand1_formatted},X"));
         },
         0x18 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("CLC");
+            bytes_count = 1;
+            instruction_text = Some(format!("CLC"));
         },
         0x19 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ORA {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("ORA {absolute_address_formatted},Y"));
         },
         0x1D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ORA {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("ORA {absolute_address_formatted},X"));
         },
         0x1E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ASL {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("ASL {absolute_address_formatted},X"));
         },
 
         0x20 => {
-            instruction_bytes_count = 3;
+            bytes_count = 3;
             let label = labeller.request_label_for_subroutine(absolute_address as usize);
-            instruction_text = format!("JSR {label}");
-            address_for_later_processing = Some(absolute_address as usize);
+            instruction_text = Some(format!("JSR {label}"));
+            address_to_process_later = Some(absolute_address as usize);
         },
         0x21 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("AND ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("AND ({operand1_formatted},X)"));
         },
         0x24 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("BIT {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("BIT {operand1_formatted}"));
         },
         0x25 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("AND {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("AND {operand1_formatted}"));
         },
         0x26 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ROL {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ROL {operand1_formatted}"));
         },
         0x28 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("PLP");
+            bytes_count = 1;
+            instruction_text = Some(format!("PLP"));
         },
         0x29 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("AND #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("AND #{operand1_formatted}"));
         },
         0x2A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("ROL A");
+            bytes_count = 1;
+            instruction_text = Some(format!("ROL A"));
         },
         0x2C => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("BIT {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("BIT {absolute_address_formatted}"));
         },
         0x2D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("AND {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("AND {absolute_address_formatted}"));
         },
         0x2E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ROL {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("ROL {absolute_address_formatted}"));
         },
 
         0x30 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BMI {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BMI {label}"));
+            address_to_process_later = Some(target_address);
         },
         0x31 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("AND ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("AND ({operand1_formatted}),Y"));
         },
         0x35 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("AND {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("AND {operand1_formatted},X"));
         },
         0x36 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ROL {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("ROL {operand1_formatted},X"));
         },
         0x38 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("SEC");
+            bytes_count = 1;
+            instruction_text = Some(format!("SEC"));
         },
         0x39 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("AND {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("AND {absolute_address_formatted},Y"));
         },
         0x3D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("AND {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("AND {absolute_address_formatted},X"));
         },
         0x3E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ROL {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("ROL {absolute_address_formatted},X"));
         },
 
         0x40 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("RTI");
+            bytes_count = 1;
+            instruction_text = Some(format!("RTI"));
             is_section_complete = true;
         },
         0x41 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("EOR ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("EOR ({operand1_formatted},X)"));
         },
         0x45 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("EOR {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("EOR {operand1_formatted}"));
         },
         0x46 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LSR {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LSR {operand1_formatted}"));
         },
         0x48 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("PHA");
+            bytes_count = 1;
+            instruction_text = Some(format!("PHA"));
         },
         0x49 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("EOR #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("EOR #{operand1_formatted}"));
         },
         0x4A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("LSR A");
+            bytes_count = 1;
+            instruction_text = Some(format!("LSR A"));
         },
         0x4C => {
-            instruction_bytes_count = 3;
+            bytes_count = 3;
             let label = labeller.request_label_for_jump_target(absolute_address as usize);
-            instruction_text = format!("JMP {label}");
+            instruction_text = Some(format!("JMP {label}"));
             is_section_complete = true;
-            address_for_later_processing = Some(absolute_address as usize);
+            address_to_process_later = Some(absolute_address as usize);
         },
         0x4D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("EOR {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("EOR {absolute_address_formatted}"));
         },
         0x4E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LSR {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("LSR {absolute_address_formatted}"));
         },
 
         0x50 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BVC {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BVC {label}"));
+            address_to_process_later = Some(target_address);
         },
         0x51 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("EOR ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("EOR ({operand1_formatted}),Y"));
         },
         0x55 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("EOR {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("EOR {operand1_formatted},X"));
         },
         0x56 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LSR {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("LSR {operand1_formatted},X"));
         },
         0x58 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("CLI");
+            bytes_count = 1;
+            instruction_text = Some(format!("CLI"));
         },
         0x59 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("EOR {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("EOR {absolute_address_formatted},Y"));
         },
         0x5D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("EOR {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("EOR {absolute_address_formatted},X"));
         },
         0x5E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LSR {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("LSR {absolute_address_formatted},X"));
         },
 
         0x60 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("RTS");
+            bytes_count = 1;
+            instruction_text = Some(format!("RTS"));
             is_section_complete = true;
         },
         0x61 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ADC ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("ADC ({operand1_formatted},X)"));
         },
         0x65 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ADC {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ADC {operand1_formatted}"));
         },
         0x66 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ROR {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ROR {operand1_formatted}"));
         },
         0x68 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("PLA");
+            bytes_count = 1;
+            instruction_text = Some(format!("PLA"));
         },
         0x69 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ADC #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("ADC #{operand1_formatted}"));
         },
         0x6A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("ROR A");
+            bytes_count = 1;
+            instruction_text = Some(format!("ROR A"));
         },
         0x6C => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("JMP ({absolute_address_formatted})");
+            bytes_count = 3;
+            instruction_text = Some(format!("JMP ({absolute_address_formatted})"));
             is_section_complete = true;
         },
         0x6D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ADC {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("ADC {absolute_address_formatted}"));
         },
         0x6E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ROR {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("ROR {absolute_address_formatted}"));
         },
 
         0x70 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BVS {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BVS {label}"));
+            address_to_process_later = Some(target_address);
         },
         0x71 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ADC ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("ADC ({operand1_formatted}),Y"));
         },
         0x75 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ADC {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("ADC {operand1_formatted},X"));
         },
         0x76 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("ROR {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("ROR {operand1_formatted},X"));
         },
         0x78 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("SEI");
+            bytes_count = 1;
+            instruction_text = Some(format!("SEI"));
         },
         0x79 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ADC {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("ADC {absolute_address_formatted},Y"));
         },
         0x7D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ADC {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("ADC {absolute_address_formatted},X"));
         },
         0x7E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("ROR {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("ROR {absolute_address_formatted},X"));
         },
 
         0x81 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STA ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("STA ({operand1_formatted},X)"));
         },
         0x84 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STY {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("STY {operand1_formatted}"));
         },
         0x85 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STA {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("STA {operand1_formatted}"));
         },
         0x86 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STX {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("STX {operand1_formatted}"));
         },
         0x88 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("DEY");
+            bytes_count = 1;
+            instruction_text = Some(format!("DEY"));
         },
         0x8A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TXA");
+            bytes_count = 1;
+            instruction_text = Some(format!("TXA"));
         },
         0x8C => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("STY {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("STY {absolute_address_formatted}"));
         },
         0x8D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("STA {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("STA {absolute_address_formatted}"));
         },
         0x8E => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("STX {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("STX {absolute_address_formatted}"));
         },
 
         0x90 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BCC {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BCC {label}"));
+            address_to_process_later = Some(target_address);
         },
         0x91 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STA ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("STA ({operand1_formatted}),Y"));
         },
         0x94 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STY {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("STY {operand1_formatted},X"));
         },
         0x95 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STA {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("STA {operand1_formatted},X"));
         },
         0x96 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("STX {operand1_formatted},Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("STX {operand1_formatted},Y"));
         },
         0x98 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TYA");
+            bytes_count = 1;
+            instruction_text = Some(format!("TYA"));
         },
         0x99 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("STA {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("STA {absolute_address_formatted},Y"));
         },
         0x9A => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TXS");
+            bytes_count = 1;
+            instruction_text = Some(format!("TXS"));
         },
         0x9D => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("STA {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("STA {absolute_address_formatted},X"));
         },
 
         0xA0 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDY #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDY #{operand1_formatted}"));
         },
         0xA1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDA ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDA ({operand1_formatted},X)"));
         },
         0xA2 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDX #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDX #{operand1_formatted}"));
         },
         0xA4 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDY {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDY {operand1_formatted}"));
         },
         0xA5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDA {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDA {operand1_formatted}"));
         },
         0xA6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDX {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDX {operand1_formatted}"));
         },
         0xA8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TAY");
+            bytes_count = 1;
+            instruction_text = Some(format!("TAY"));
         },
         0xA9 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDA #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDA #{operand1_formatted}"));
         },
         0xAA => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TAX");
+            bytes_count = 1;
+            instruction_text = Some(format!("TAX"));
         },
         0xAC => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDY {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDY {absolute_address_formatted}"));
         },
         0xAD => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDA {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDA {absolute_address_formatted}"));
         },
         0xAE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDX {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDX {absolute_address_formatted}"));
         },
 
         0xB0 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BCS {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BCS {label}"));
+            address_to_process_later = Some(target_address);
         },
         0xB1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDA ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDA ({operand1_formatted}),Y"));
         },
         0xB4 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDY {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDY {operand1_formatted},X"));
         },
         0xB5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDA {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDA {operand1_formatted},X"));
         },
         0xB6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("LDX {operand1_formatted},Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("LDX {operand1_formatted},Y"));
         },
         0xB8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("CLV");
+            bytes_count = 1;
+            instruction_text = Some(format!("CLV"));
         },
         0xB9 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDA {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDA {absolute_address_formatted},Y"));
         },
         0xBA => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("TSX");
+            bytes_count = 1;
+            instruction_text = Some(format!("TSX"));
         },
         0xBC => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDY {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDY {absolute_address_formatted},X"));
         },
         0xBD => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDA {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDA {absolute_address_formatted},X"));
         },
         0xBE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("LDX {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("LDX {absolute_address_formatted},Y"));
         },
 
         0xC0 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CPY #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CPY #{operand1_formatted}"));
         },
         0xC1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CMP ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("CMP ({operand1_formatted},X)"));
         },
         0xC4 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CPY {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CPY {operand1_formatted}"));
         },
         0xC5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CMP {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CMP {operand1_formatted}"));
         },
         0xC6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("DEC {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("DEC {operand1_formatted}"));
         },
         0xC8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("INY");
+            bytes_count = 1;
+            instruction_text = Some(format!("INY"));
         },
         0xC9 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CMP #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CMP #{operand1_formatted}"));
         },
         0xCA => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("DEX");
+            bytes_count = 1;
+            instruction_text = Some(format!("DEX"));
         },
         0xCC => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("CPY {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("CPY {absolute_address_formatted}"));
         },
         0xCD => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("CMP {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("CMP {absolute_address_formatted}"));
         },
         0xCE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("DEC {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("DEC {absolute_address_formatted}"));
         },
 
         0xD0 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BNE {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BNE {label}"));
+            address_to_process_later = Some(target_address);
         },
         0xD1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CMP ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("CMP ({operand1_formatted}),Y"));
         },
         0xD5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CMP {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("CMP {operand1_formatted},X"));
         },
         0xD6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("DEC {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("DEC {operand1_formatted},X"));
         },
         0xD8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("CLD");
+            bytes_count = 1;
+            instruction_text = Some(format!("CLD"));
         },
         0xD9 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("CMP {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("CMP {absolute_address_formatted},Y"));
         },
         0xDD => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("CMP {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("CMP {absolute_address_formatted},X"));
         },
         0xDE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("DEC {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("DEC {absolute_address_formatted},X"));
         },
 
         0xE0 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CPX #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CPX #{operand1_formatted}"));
         },
         0xE1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("SBC ({operand1_formatted},X)");
+            bytes_count = 2;
+            instruction_text = Some(format!("SBC ({operand1_formatted},X)"));
         },
         0xE4 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("CPX {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("CPX {operand1_formatted}"));
         },
         0xE5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("SBC {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("SBC {operand1_formatted}"));
         },
         0xE6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("INC {operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("INC {operand1_formatted}"));
         },
         0xE8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("INX");
+            bytes_count = 1;
+            instruction_text = Some(format!("INX"));
         },
         0xE9 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("SBC #{operand1_formatted}");
+            bytes_count = 2;
+            instruction_text = Some(format!("SBC #{operand1_formatted}"));
         },
         0xEA => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("NOP");
+            bytes_count = 1;
+            instruction_text = Some(format!("NOP"));
         },
         0xEC => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("CPX {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("CPX {absolute_address_formatted}"));
         },
         0xED => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("SBC {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("SBC {absolute_address_formatted}"));
         },
         0xEE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("INC {absolute_address_formatted}");
+            bytes_count = 3;
+            instruction_text = Some(format!("INC {absolute_address_formatted}"));
         },
 
         0xF0 => {
-            instruction_bytes_count = 2;
-            let target_address = calculate_target_address((address + instruction_bytes_count) as u16, operand1);
+            bytes_count = 2;
+            let target_address = calculate_target_address((address + bytes_count) as u16, operand1);
             let label = labeller.request_label_for_branch_target(target_address);
-            instruction_text = format!("BEQ {label}");
-            address_for_later_processing = Some(target_address);
+            instruction_text = Some(format!("BEQ {label}"));
+            address_to_process_later = Some(target_address);
         },
         0xF1 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("SBC ({operand1_formatted}),Y");
+            bytes_count = 2;
+            instruction_text = Some(format!("SBC ({operand1_formatted}),Y"));
         },
         0xF5 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("SBC {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("SBC {operand1_formatted},X"));
         },
         0xF6 => {
-            instruction_bytes_count = 2;
-            instruction_text = format!("INC {operand1_formatted},X");
+            bytes_count = 2;
+            instruction_text = Some(format!("INC {operand1_formatted},X"));
         },
         0xF8 => {
-            instruction_bytes_count = 1;
-            instruction_text = format!("SED");
+            bytes_count = 1;
+            instruction_text = Some(format!("SED"));
         },
         0xF9 => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("SBC {absolute_address_formatted},Y");
+            bytes_count = 3;
+            instruction_text = Some(format!("SBC {absolute_address_formatted},Y"));
         },
         0xFD => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("SBC {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("SBC {absolute_address_formatted},X"));
         },
         0xFE => {
-            instruction_bytes_count = 3;
-            instruction_text = format!("INC {absolute_address_formatted},X");
+            bytes_count = 3;
+            instruction_text = Some(format!("INC {absolute_address_formatted},X"));
         },
 
-        unknown_opcode => {
-            // We still want to print out what's been processed correctly up until this point,
-            // so we'll just tell it to stop here and have some info for the instruction text.
-            is_section_complete = true;
-            instruction_bytes_count = 1;
-            instruction_text = format!("\n***\nUNKNOWN OPCODE AT ADDRESS ${:04X}: ${:02X}\n***", address, unknown_opcode);
+        _unknown_opcode => {
+            bytes_count = 0;
+            instruction_text = None;
         },
     }
 
-    let mut bytes = String::new();
-    for i in 0..instruction_bytes_count {
-        bytes = format!("{bytes} {:02X}", prg_rom_contents[contents_offset + i]);
-    }
-    let text_line = format!("    {instruction_text}        # {:04X} |{bytes}", address);
+    match instruction_text {
+        Some(instruction_text) => {
+            let mut bytes = String::new();
+            for i in 0..bytes_count {
+                bytes = format!("{bytes} {:02X}", prg_rom_contents[contents_offset + i]);
+            }
+            let text_line = format!("    {instruction_text}        # {:04X} |{bytes}", address);
 
-    (is_section_complete, instruction_bytes_count, text_line, address_for_later_processing)
+            Some(DisassembledInstruction {
+                is_section_complete,
+                bytes_count,
+                text_line,
+                address_to_process_later,
+            })
+        },
+        None => None,
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -745,14 +760,14 @@ mod tests {
 
     fn assert_disasm(bytes: [u8; 3], expected: &str) {
         let mut labeller = Labeller::new();
-        let (_, _, output, _) =
-            disassemble_instruction(&bytes, 0, 0x8000, &mut labeller);
+        let result =
+            disassemble_instruction(&bytes, 0, 0x8000, &mut labeller).unwrap();
 
         assert!(
-            output.contains(expected),
+            result.text_line.contains(expected),
             "Expected `{}` in `{}`",
             expected,
-            output
+            result.text_line
         );
     }
 

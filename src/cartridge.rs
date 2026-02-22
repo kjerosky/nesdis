@@ -113,23 +113,28 @@ impl Cartridge {
                     continue;
                 }
 
-                let (is_section_complete, current_instruction_bytes, text_line, address_for_later_processing) = disassemble_instruction(
+                let result = disassemble_instruction(
                     &self.prg_rom_contents, current_address - 0x8000, current_address, &mut self.labeller);
+                if result.is_none() {
+                    is_current_section_processing_complete = true;
+                    continue;
+                }
 
-                if let Some(new_entry_point) = address_for_later_processing && !self.text_lines.contains_key(&new_entry_point) {
+                let result = result.unwrap();
+                if let Some(new_entry_point) = result.address_to_process_later && !self.text_lines.contains_key(&new_entry_point) {
                     entry_points.push(new_entry_point);
                 }
 
                 self.text_lines.insert(
                     current_address,
                     TextLine {
-                        contents: text_line,
-                        bytes: current_instruction_bytes,
+                        contents: result.text_line,
+                        bytes: result.bytes_count,
                     }
                 );
 
-                is_current_section_processing_complete = is_section_complete;
-                current_address += current_instruction_bytes;
+                is_current_section_processing_complete = result.is_section_complete;
+                current_address += result.bytes_count;
             }
         }
     }
